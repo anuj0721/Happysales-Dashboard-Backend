@@ -44,7 +44,7 @@ const extractworkspaceid = asyncHandler(async (req, res) => {
 
 			const user_email_dict = {};
 
-			const placeholders = creator_ids.map(() => "$1").join(", ");
+			const placeholders = creator_ids.map(id => `$${creator_ids.indexOf(id) + 1}`).join(', ');
 
 			const userid_email_query = `SELECT id, email FROM public."user" WHERE id IN (${placeholders})`;
 
@@ -54,20 +54,20 @@ const extractworkspaceid = asyncHandler(async (req, res) => {
 				user_email_dict[row.id] = row.email;
 			}
 
-			const placeholders2 = workspace_ids.map(() => '$1').join(', ');
+			const placeholder2 = workspace_ids.map(id => `$${workspace_ids.indexOf(id) + 1}`).join(', ');
 
 			const workspace_status_query = `
 				SELECT workspace_id,
 						COUNT(*) AS total_users,
 						COUNT(CASE WHEN status = 'active' THEN 1 END) AS active_users
 						FROM public."user"
-						WHERE workspace_id IN (${placeholders2})
+						WHERE workspace_id IN (${placeholder2})
 						GROUP BY workspace_id;
 				`;
 
 			const active_users_count = await post_client.query(workspace_status_query, workspace_ids);
 
-			const active_user_count_dict = {}
+			const active_user_count_dict = {};
 
 			for (const row of active_users_count.rows){
 
@@ -82,64 +82,100 @@ const extractworkspaceid = asyncHandler(async (req, res) => {
 				const workspace_data = {
 					"id": row.id,
 					"name": row.name,
-					"creator_email": user_email_dict[row.created_by] || "NA",
+					"creator email": user_email_dict[row.created_by] || "NA",
 					"# Active Users": active_user_count_dict[row.id]["# Active Users"],
 					"# Total Users": active_user_count_dict[row.id]["# Total Users"]
 				}
 				
 				matching_workspaces.push(workspace_data)
 			}
-
-			console.log(matching_workspaces)
-
 		}
 
-		else if(criteria === "Email/Domain"){
+		else if(criteria === "Id"){
 
-			let creator_ids = new Set()
+			const query = `SELECT name, created_by FROM workspace WHERE id = $1`;
+			const result = await post_client.query(query, [search_string]);
+			const workspace = result.rows[0];
 
-			let workspace_ids = new Set()
+			const creatorEmailQuery = `SELECT email from public."user" WHERE id = $1`
+			const creatorEmailResult = await post_client.query(creatorEmailQuery, [workspace.created_by]);
 
-			const workspaceSearchQuery = `SELECT * FROM workspace WHERE LOWER(email) = LOWER($1)`;
+			const email = creatorEmailResult.rows[0].email;
 			
-			const workspaces = await post_client.query(workspaceSearchQuery, [search_string])
+			const sqlQuery = `SELECT COUNT(*) AS total_users,
+				COUNT(CASE WHEN status = 'active' THEN 1 END) AS active_users
+				FROM public."user" WHERE workspace_id = $1;`;
 
-			for (const row of workspaces.rows) {
+			const results = await post_client.query(sqlQuery, [search_string]);
 			
-				creator_ids.add(row.created_by);
-				workspace_ids.add(row.id)
-			
+			const workspaceActiveUsers = results.rows[0].active_users;
+			const workspaceTotalUsers = results.rows[0].total_users;
+
+			const workspace_data = {
+				"id" : search_string,
+				"name": workspace.name,
+				"creator email": email,
+				"# Active Users": workspaceActiveUsers,
+				"workspaceTotalUsers": workspaceTotalUsers
 			}
+
+			matching_workspaces.push(workspace_data)
+		}
+
+		else if(criteria === "Domain"){
+
+			const query = `
+				SELECT id, email
+				FROM public."user"
+				WHERE LOWER(email) LIKE '%@' || LOWER($1) || '%'
+				`;
+			
+			const user_with_domain_result = await post_client.query(query, [search_string]);
+
+			const user_email_with_domain = {};
+
+			const user_with_domain = [];
+			
+			for (const row of user_with_domain_result.rows) {
+				user_email_with_domain[row.id] = row.email;
+				user_with_domain.push(row.id);
+			}
+
+			const placeholder = user_with_domain.map((id) => `$${user_with_domain.indexOf(id) + 1}`).join(", ");
 		
-			creator_ids = [...creator_ids]
-			workspace_ids = [...workspace_ids]
+			const creator_workspace_query = `
+					SELECT id, name, created_by FROM workspace
+					WHERE created_by IN (${placeholder})
+				`;
 
-			const user_email_dict = {};
+			const result = await post_client.query(creator_workspace_query, user_with_domain);
 
-			const placeholders = creator_ids.map(() => "$1").join(", ");
+			const workspacesById = {};
 
-			const userid_email_query = `SELECT id, email FROM public."user" WHERE id IN (${placeholders})`;
+			let workspace_ids = [];
 
-			const results = await post_client.query(userid_email_query, creator_ids);
-
-			for (const row of results.rows){
-				user_email_dict[row.id] = row.email;
+			for (const row of result.rows) {
+					workspacesById[row.id] = {
+					"Workspace name": row.name,
+					"Workspace Creator Id": row.created_by,
+				};
+				workspace_ids.push(row.id);
 			}
-
-			const placeholders2 = workspace_ids.map(() => '$1').join(', ');
+			
+			const placeholder2 = workspace_ids.map(id => `$${workspace_ids.indexOf(id) + 1}`).join(', ');
 
 			const workspace_status_query = `
 				SELECT workspace_id,
 						COUNT(*) AS total_users,
 						COUNT(CASE WHEN status = 'active' THEN 1 END) AS active_users
 						FROM public."user"
-						WHERE workspace_id IN (${placeholders2})
+						WHERE workspace_id IN (${placeholder2})
 						GROUP BY workspace_id;
 				`;
 
 			const active_users_count = await post_client.query(workspace_status_query, workspace_ids);
 
-			const active_user_count_dict = {}
+			const active_user_count_dict = {};
 
 			for (const row of active_users_count.rows){
 
@@ -149,21 +185,18 @@ const extractworkspaceid = asyncHandler(async (req, res) => {
 				};
 			}
 
-			for (const row of workspaces.rows) {
-				
+			for (const id of workspace_ids){
+
 				const workspace_data = {
-					"id": row.id,
-					"name": row.name,
-					"creator_email": user_email_dict[row.created_by] || "NA",
-					"# Active Users": active_user_count_dict[row.id]["# Active Users"],
-					"# Total Users": active_user_count_dict[row.id]["# Total Users"]
+					"id": id,
+					"name": workspacesById[id]["Workspace name"],
+					"creator email": user_email_with_domain[workspacesById[id]["Workspace Creator Id"]],
+					"# Active Users": active_user_count_dict[id]["# Active Users"],
+					"# Total Users": active_user_count_dict[id]["# Total Users"]
 				}
 				
-				matching_workspaces.push(workspace_data)
+				matching_workspaces.push(workspace_data);
 			}
-
-			console.log(matching_workspaces)
-
 		}
 
 		return res
@@ -296,7 +329,7 @@ const workspacedetail = asyncHandler(async (req, res) => {
 			}
 		}
 		
-		console.log(activityDetails)
+		// console.log(activityDetails)
 
 
 		return res
