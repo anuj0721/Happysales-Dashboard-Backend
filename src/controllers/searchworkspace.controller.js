@@ -203,9 +203,7 @@ const extractworkspaceid = asyncHandler(async (req, res) => {
 			.status(200)
 			.json(new ApiResponse(200, {"Workspaces": matching_workspaces}, "OK"));
 	}catch(err){
-
 		throw new ApiError(500, "Couldn't extract workspace ids");
-
 	}
 });
 
@@ -238,8 +236,7 @@ const workspacedetail = asyncHandler(async (req, res) => {
 		
 		let userDetails = await post_client.query(user_data_query, [workspaceId]);
 
-		userDetails = userDetails.rows
-		// const userDetailsDict = {"userDeatils" : userDetails.rows};
+		userDetails = userDetails.rows;
 
 		const user_ids = []
 
@@ -253,21 +250,22 @@ const workspacedetail = asyncHandler(async (req, res) => {
 		const pipeline = [
 			{
 				$match: {
-				user_id: { $in: user_ids }, // Filter by IDs in user_ids array
+					user_id: { $in: user_ids }, // Filter by IDs in user_ids array
 				},
 			},
 			{
 				$group: {
-				_id: "$user_id", // Maintain user_id as the grouping key
-				documents: {
-					$push: "$$ROOT", // Push entire document to the "documents" array
-				},
+					_id: "$user_id", // Maintain user_id as the grouping key
+					documents: {
+						$push: "$$ROOT", // Push entire document to the "documents" array
+					},
 				},
 			},
 		];
 
 		const userGroupsForEmailIcebreaker = await user_prospect_collection.aggregate(pipeline).toArray();
 		const userGroupsForPracticePitch = await call_script_collection.aggregate(pipeline).toArray();
+		console.log(userGroupsForPracticePitch)
 
 		const countEmailIcebreaker = {};
 		const countPracticePitch = {};
@@ -313,24 +311,31 @@ const workspacedetail = asyncHandler(async (req, res) => {
 
 		for (const user_id of user_ids) {
 			if ( countEmailIcebreaker[user_id] !== undefined || countPracticePitch[user_id] !== undefined) {
+
 				activityDetails[user_id] = {}; // Initialize empty object for user
 
 				activityDetails[user_id]["email"] = user_email_dict[user_id];
 
 				if (countEmailIcebreaker[user_id]) {
+
 					activityDetails[user_id]["# of Emails"] = countEmailIcebreaker[user_id]["# of Emails"];
-					
 					activityDetails[user_id]["# of Icebreakers"] = countEmailIcebreaker[user_id]["# of Icebreakers"];
+				}
+				else{
+					activityDetails[user_id]["# of Emails"] = 0;
+					activityDetails[user_id]["# of Icebreakers"] = 0;
 				}
 
 				if (countPracticePitch[user_id]) {
 					activityDetails[user_id]["# of Call Scripts"] = countPracticePitch[user_id]["# of Call Scripts"];
 				}
+				else{
+					activityDetails[user_id]["# of Call Scripts"] = 0;
+				}
+
+				console.log(activityDetails[user_id]["# of Call Scripts"]);
 			}
 		}
-		
-		// console.log(activityDetails)
-
 
 		return res
 		.status(200)
@@ -348,9 +353,7 @@ const workspacedetail = asyncHandler(async (req, res) => {
 			)
 		);
 	}catch(err){
-
 		throw new ApiError(500, "Couldn't find workspace detail");
-
 	}
 });
 
