@@ -5,32 +5,32 @@ import bcrypt from "bcrypt";
 const userSchema = new Schema(
     {
         username: {
-        type: String,
-        required: true,
-        unique: true,
-        lowercase: true,
-        trim: true, //to remove leading and trailng whitespaces
-        index: true,
+            type: String,
+            required: true,
+            unique: true,
+            lowercase: true,
+            trim: true, //to remove leading and trailng whitespaces
+            index: true,
         },
         email: {
-        type: String,
-        required: true,
-        unique: true,
-        lowecase: true,
-        trim: true,
+            type: String,
+            required: true,
+            unique: true,
+            lowecase: true,
+            trim: true,
         },
         fullName: {
-        type: String,
-        required: true,
-        trim: true,
-        index: true,
+            type: String,
+            required: true,
+            trim: true,
+            index: true,
         },
         password: {
-        type: String,
-        required: [true, "Password is required"],
+            type: String,
+            required: [true, "Password is required"],
         },
         refreshToken: {
-        type: String,
+            type: String,
         },
     },
     {
@@ -78,4 +78,4 @@ userSchema.methods.generateRefreshToken = function () {
     );
 };
 
-export const User = mongoose.model("User", userSchema);
+export const User = mongoose.model("adminuser", userSchema);
